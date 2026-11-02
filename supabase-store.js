@@ -91,7 +91,9 @@
       discountedPrice: Number(row.discounted_price),
       discountPercent: Number(row.discount_percent || 0),
       startDate: row.start_date || '',
-      endDate: row.end_date || ''
+      endDate: row.end_date || '',
+      sizes: Array.isArray(row.sizes) ? row.sizes : [],
+      colors: Array.isArray(row.colors) ? row.colors : []
     };
   }
 
@@ -106,7 +108,9 @@
       discounted_price: Number(offer.discountedPrice),
       discount_percent: Number(offer.discountPercent || 0),
       start_date: offer.startDate || null,
-      end_date: offer.endDate || null
+      end_date: offer.endDate || null,
+      sizes: Array.isArray(offer.sizes) ? offer.sizes : [],
+      colors: Array.isArray(offer.colors) ? offer.colors : []
     };
   }
 

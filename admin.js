@@ -1,4 +1,4 @@
-const LOCAL_ADMIN_PASSWORD_HASH = '715c95ff1aad4ab7651363960f7e6cb12d169b56b45747f2c4e6cd43c5dd9bae';
+const LOCAL_ADMIN_PASSWORD_HASH = 'e5fa230b1017a87b66539992e4f3fca5a49923f7904b1a04dce2b4c40da0af81';
 let pendingAuthMessage = '';
 const $ = id => document.getElementById(id);
 let imageProcessing = Promise.resolve();
@@ -8,6 +8,28 @@ let categories = [];
 let offers = [];
 let unsubscribeStore = [];
 let offerImageProcessing = Promise.resolve();
+const AVAILABLE_SIZES = [
+  'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL',
+  '38', '40', '42', '44', '46', '48', '50', '52'
+];
+const AVAILABLE_COLORS = [
+  { name: 'أسود', value: '#171717' },
+  { name: 'أبيض', value: '#ffffff' },
+  { name: 'رمادي', value: '#888888' },
+  { name: 'كحلي', value: '#1e3a5f' },
+  { name: 'أزرق', value: '#2878c8' },
+  { name: 'أحمر', value: '#d83b3b' },
+  { name: 'أخضر', value: '#27834a' },
+  { name: 'بيج', value: '#d5bd98' },
+  { name: 'بني', value: '#805333' },
+  { name: 'وردي', value: '#e58aab' },
+  { name: 'أصفر', value: '#e5bb35' },
+  { name: 'زيتي', value: '#777844' }
+];
+const DEFAULT_SOCIAL_LINKS = {
+  facebook: 'https://www.facebook.com/kabush.center/',
+  tiktok: 'https://www.tiktok.com/@kabush.store?is_from_webapp=1&sender_device=pc'
+};
 
 function readStorage(key, fallback) {
   try {
@@ -23,6 +45,15 @@ function showToast(message) {
   element.textContent = message;
   element.classList.add('show');
   window.setTimeout(() => element.classList.remove('show'), 2600);
+}
+
+function populateSettingsForm() {
+  $('adminWhatsapp').value = settings.whatsapp || '';
+  $('adminPhone').value = settings.phone || '';
+  $('adminHours').value = settings.hours || '';
+  $('adminFacebook').value = settings.facebookUrl === undefined ? DEFAULT_SOCIAL_LINKS.facebook : settings.facebookUrl;
+  $('adminTikTok').value = settings.tiktokUrl === undefined ? DEFAULT_SOCIAL_LINKS.tiktok : settings.tiktokUrl;
+  $('adminIntroDuration').value = settings.introDuration || 2;
 }
 
 function renderAuth() {
@@ -93,9 +124,7 @@ function showLocalAdmin() {
   $('adminSyncStatus').textContent = window.location.protocol === 'file:'
     ? 'تنبيه: الصفحة مفتوحة كملف محلي (file://)، لذلك لن تنتقل العروض إلى صفحة المتجر. افتح الموقع عبر رابط منشور أو خادم محلي.'
     : 'وضع محلي فقط — التغييرات محفوظة في هذا المتصفح ولا تتزامن مع بقية الأجهزة.';
-  $('adminWhatsapp').value = settings.whatsapp || '';
-  $('adminPhone').value = settings.phone || '';
-  $('adminHours').value = settings.hours || '';
+  populateSettingsForm();
   renderCategories();
   renderProducts();
   renderOffers();
@@ -144,9 +173,7 @@ async function showAdmin(user) {
       }, handleCloudError),
       window.KABOUSH_STORE.watchSettings(items => {
         settings = items;
-        $('adminWhatsapp').value = settings.whatsapp || '';
-        $('adminPhone').value = settings.phone || '';
-        $('adminHours').value = settings.hours || '';
+        populateSettingsForm();
       }, handleCloudError),
       window.KABOUSH_STORE.watchOffers(items => {
         offers = items;
@@ -167,6 +194,25 @@ function handleCloudError(error) {
 
 function allCategories() {
   return [...new Set([...categories, ...products.map(product => product.category)].filter(Boolean))];
+}
+
+function renderOptionChoices(containerId, options, selectedValues = [], preserveUnknown = false) {
+  const container = $(containerId);
+  const selected = new Set(selectedValues);
+  const knownOptions = options.map(option => typeof option === 'string' ? { name: option } : option);
+  const unknownOptions = preserveUnknown
+    ? [...selected].filter(value => !knownOptions.some(option => option.name === value)).map(name => ({ name }))
+    : [];
+  container.innerHTML = [...knownOptions, ...unknownOptions].map(option => `
+    <label class="option-chip ${option.value ? 'has-swatch' : ''}">
+      <input type="checkbox" value="${escapeHTML(option.name)}" ${selected.has(option.name) ? 'checked' : ''}>
+      ${option.value ? `<span class="color-swatch" style="--swatch-color:${option.value}"></span>` : ''}
+      <span>${escapeHTML(option.name)}</span>
+    </label>`).join('');
+}
+
+function selectedOptions(containerId) {
+  return [...$(containerId).querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
 }
 
 function renderCategories() {
@@ -195,6 +241,7 @@ function renderProducts() {
           <strong>${escapeHTML(product.name)}</strong>
           <span>${escapeHTML(product.category)} · ${Number(product.price).toLocaleString('en-US')} ج.م</span>
           <small>الكود: ${escapeHTML(product.id)}</small>
+          <small>المقاسات: ${escapeHTML((product.sizes || []).join('، ') || 'غير محددة')} · الألوان: ${escapeHTML((product.colors || []).join('، ') || 'غير محددة')}</small>
         </div>
         <div class="admin-product-actions">
           <button class="button button-light" type="button" data-edit-product="${escapeHTML(product.id)}">تعديل</button>
@@ -237,6 +284,7 @@ function renderOffers() {
           <strong>${escapeHTML(offer.title)}</strong>
           <span>${escapeHTML(offer.description || 'لا توجد تفاصيل إضافية')}</span>
           <small><del>${Number(offer.originalPrice).toLocaleString('en-US')} ج.م</del> · ${Number(offer.discountedPrice).toLocaleString('en-US')} ج.م · خصم ${percent}%</small>
+          <small>المقاسات: ${escapeHTML((offer.sizes || []).join('، ') || 'غير محددة')} · الألوان: ${escapeHTML((offer.colors || []).join('، ') || 'غير محددة')}</small>
           <small>${dates}</small>
         </div>
         <span class="offer-admin-status">${offerStatus(offer)}</span>
@@ -272,6 +320,8 @@ function resetOfferForm() {
   $('offerImagePreview').src = '';
   $('offerImagePreview').classList.add('hidden');
   $('offerImageStatus').textContent = '';
+  renderOptionChoices('offerSizeOptions', AVAILABLE_SIZES);
+  renderOptionChoices('offerColorOptions', AVAILABLE_COLORS);
   updateOfferImageChoice();
   $('offerFormTitle').textContent = 'إضافة عرض';
   $('saveOfferButton').textContent = 'إضافة العرض';
@@ -285,6 +335,8 @@ function editOffer(id) {
   $('offerId').value = offer.id;
   $('offerTitle').value = offer.title || '';
   $('offerDescription').value = offer.description || '';
+  renderOptionChoices('offerSizeOptions', AVAILABLE_SIZES, offer.sizes || [], true);
+  renderOptionChoices('offerColorOptions', AVAILABLE_COLORS, offer.colors || [], true);
   $('offerImage').value = offer.image || '';
   document.querySelector('input[name="offerImageSource"][value="url"]').checked = true;
   updateOfferImageChoice();
@@ -307,6 +359,8 @@ function resetProductForm() {
   $('imagePreview').src = '';
   $('imagePreview').classList.add('hidden');
   $('imageStatus').textContent = '';
+  renderOptionChoices('productSizeOptions', AVAILABLE_SIZES);
+  renderOptionChoices('productColorOptions', AVAILABLE_COLORS);
   updateImageChoice();
   $('productFormTitle').textContent = 'إضافة منتج';
   $('saveProductButton').textContent = 'إضافة المنتج';
@@ -325,6 +379,8 @@ function editProduct(id) {
   $('pImage').value = product.image;
   showImagePreview(product.image);
   $('pDesc').value = product.desc || '';
+  renderOptionChoices('productSizeOptions', AVAILABLE_SIZES, product.sizes || [], true);
+  renderOptionChoices('productColorOptions', AVAILABLE_COLORS, product.colors || [], true);
   $('productFormTitle').textContent = 'تعديل المنتج';
   $('saveProductButton').textContent = 'حفظ التعديلات';
   $('cancelEditButton').classList.remove('hidden');
@@ -489,13 +545,16 @@ $('settingsForm').addEventListener('submit', async event => {
   const updatedSettings = {
     whatsapp: $('adminWhatsapp').value.trim(),
     phone: $('adminPhone').value.trim(),
-    hours: $('adminHours').value.trim()
+    hours: $('adminHours').value.trim(),
+    facebookUrl: $('adminFacebook').value.trim(),
+    tiktokUrl: $('adminTikTok').value.trim(),
+    introDuration: Math.max(1, Math.min(10, Number($('adminIntroDuration').value) || 2))
   };
   if (!window.KABOUSH_STORE || !window.KABOUSH_STORE.isConfigured) {
     try {
       localStorage.setItem('kaboush_settings', JSON.stringify(updatedSettings));
       settings = updatedSettings;
-      showToast('تم حفظ بيانات التواصل على هذا الجهاز فقط.');
+      showToast('تم حفظ الإعدادات على هذا الجهاز فقط.');
     } catch {
       showToast('تعذر حفظ الإعدادات في مساحة التخزين المحلية.');
     }
@@ -503,9 +562,9 @@ $('settingsForm').addEventListener('submit', async event => {
   }
   try {
     await window.KABOUSH_STORE.saveSettings(updatedSettings);
-    showToast('تم حفظ بيانات التواصل ومزامنتها.');
+    showToast('تم حفظ الإعدادات ومزامنتها.');
   } catch (error) {
-    showToast(`تعذر حفظ بيانات التواصل: ${error.message}`);
+    showToast(`تعذر حفظ الإعدادات: ${error.message}`);
   }
 });
 
@@ -554,6 +613,8 @@ $('offerForm').addEventListener('submit', async event => {
     originalPrice,
     discountedPrice,
     discountPercent: offerDiscountPercent(originalPrice, discountedPrice),
+    sizes: selectedOptions('offerSizeOptions'),
+    colors: selectedOptions('offerColorOptions'),
     startDate,
     endDate
   };
@@ -606,7 +667,10 @@ $('offerForm').addEventListener('submit', async event => {
         return;
       }
     }
-    showToast(`تعذر حفظ العرض في Supabase: ${error.message}`);
+    const missingOptionsColumn = /could not find the ['"](?:sizes|colors)['"] column of ['"]offers['"] in the schema cache/i.test(error.message || '');
+    showToast(missingOptionsColumn
+      ? 'جدول العروض يحتاج تحديثًا: نفّذ محتوى ملف supabase-offer-options.sql في Supabase SQL Editor ثم أعد المحاولة.'
+      : `تعذر حفظ العرض في Supabase: ${error.message}`);
   }
 });
 
@@ -683,8 +747,8 @@ $('productForm').addEventListener('submit', async event => {
     image,
     imagePath: existingProduct && existingProduct.image === image ? (existingProduct.imagePath || '') : '',
     desc: $('pDesc').value.trim(),
-    sizes: oldId ? (products.find(item => item.id === oldId).sizes || ['M', 'L', 'XL']) : ['M', 'L', 'XL'],
-    colors: oldId ? (products.find(item => item.id === oldId).colors || ['أسود', 'أبيض']) : ['أسود', 'أبيض']
+    sizes: selectedOptions('productSizeOptions'),
+    colors: selectedOptions('productColorOptions')
   };
   if (!window.KABOUSH_STORE || !window.KABOUSH_STORE.isConfigured) {
     const updatedProducts = oldId
@@ -871,6 +935,11 @@ function escapeHTML(value) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[character]));
 }
+
+renderOptionChoices('productSizeOptions', AVAILABLE_SIZES);
+renderOptionChoices('productColorOptions', AVAILABLE_COLORS);
+renderOptionChoices('offerSizeOptions', AVAILABLE_SIZES);
+renderOptionChoices('offerColorOptions', AVAILABLE_COLORS);
 
 if (!window.KABOUSH_STORE || !window.KABOUSH_STORE.isConfigured) {
   renderAuth();
